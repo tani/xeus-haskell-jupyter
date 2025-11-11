@@ -8,6 +8,10 @@
 
 cmake_minimum_required(VERSION 3.10.0)
 project(xeus-haskell)
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake;${CMAKE_MODULE_PATH}")
 
 set(XEUS_HASKELL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -96,7 +100,7 @@ endif ()
 
 if(EMSCRIPTEN)
     # ENV (https://github.com/emscripten-core/emscripten/commit/6d9681ad04f60b41ef6345ab06c29bbc9eeb84e0)
-    set(EMSCRIPTEN_FEATURES "${EMSCRIPTEN_FEATURES} -s \"EXTRA_EXPORTED_RUNTIME_METHODS=[ENV']\"")
+    set(EMSCRIPTEN_FEATURES "${EMSCRIPTEN_FEATURES} -s \"EXTRA_EXPORTED_RUNTIME_METHODS=['ENV']\"")
 endif()
 
 
@@ -124,7 +128,7 @@ include(CheckCXXCompilerFlag)
 
 string(TOUPPER "${CMAKE_BUILD_TYPE}" U_CMAKE_BUILD_TYPE)
 
-set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib; ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}")
+set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib;${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}")
 
 macro(xeus_haskell_set_common_options target_name)
     if (MSVC)
@@ -361,3 +365,16 @@ include(MicroHs)
 fetch_and_build_microhs(MICROHS_BIN MICROHS_SRC_DIR)
 build_and_install_libmhs(${MICROHS_BIN} ${MICROHS_SRC_DIR})
 
+include(MicroUnitTesting)
+enable_testing()
+fetch_ut()
+add_executable(test_mhs_repl test/test_mhs_repl.cpp src/mhs_repl.cpp)
+add_dependencies(test_mhs_repl mhs_obj)
+target_include_directories(test_mhs_repl
+  PUBLIC
+  $<BUILD_INTERFACE:${XEUS_HASKELL_INCLUDE_DIR}>
+  $<INSTALL_INTERFACE:include>
+  PRIVATE
+  ${MHS_INCLUDE_DIR})
+target_link_libraries(test_mhs_repl PRIVATE ${MHS_OBJ} Boost::ut)
+add_test(NAME test_mhs_repl COMMAND test_mhs_repl)

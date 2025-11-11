@@ -9,9 +9,9 @@ function(fetch_and_build_microhs MICROHS_BIN MICROHS_SRC_DIR)
         URL ${MICROHS_URL}
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         PREFIX ${MICROHS_PREFIX}
-        CONFIGURE_COMMAND ""  # skip configuration
+        CONFIGURE_COMMAND ""
         BUILD_COMMAND make -C <SOURCE_DIR> bin/mhs
-        INSTALL_COMMAND ""    # skip installation
+        INSTALL_COMMAND ""
     )
 
     ExternalProject_Get_Property(MicroHsProject SOURCE_DIR)
@@ -19,35 +19,61 @@ function(fetch_and_build_microhs MICROHS_BIN MICROHS_SRC_DIR)
     set(${MICROHS_BIN} "${SOURCE_DIR}/bin/mhs" PARENT_SCOPE)
 endfunction()
 
-include(GNUInstallDirs)
-
 function(build_and_install_libmhs MICROHS_BIN MICROHS_SRC_DIR)
     set(OUTPUT_HEADER "${CMAKE_CURRENT_BINARY_DIR}/Repl_stub.h")
-    set(OUTPUT_LIB "${CMAKE_CURRENT_BINARY_DIR}/libmhs.so")
+    set(REPL_C "${CMAKE_CURRENT_BINARY_DIR}/Repl.c")
+    set(REPL_O "${CMAKE_CURRENT_BINARY_DIR}/Repl.o")
+    set(EVAL_O "${CMAKE_CURRENT_BINARY_DIR}/eval.o")
 
     add_custom_command(
-        OUTPUT ${OUTPUT_LIB} ${OUTPUT_HEADER}
+        OUTPUT ${REPL_C} ${OUTPUT_HEADER}
         COMMAND ${CMAKE_COMMAND} -E env
                 "MHSDIR=${MICROHS_SRC_DIR}"
                 ${MICROHS_BIN}
-                -c -optc -shared -optc -fPIC
+                -c
                 -i${MICROHS_SRC_DIR}/mhs
                 -i${MICROHS_SRC_DIR}/src
                 -i${MICROHS_SRC_DIR}/lib
                 -i${MICROHS_SRC_DIR}/paths
                 -i${CMAKE_CURRENT_SOURCE_DIR}/src
-                Repl -o libmhs.so
-        COMMAND pwd && ls
+                Repl
+                -o Repl.c
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        COMMENT "Building libmhs.so and ReplHs_sub.h using mhs"
+        COMMENT "Generating Repl.c and Repl_stub.h using MicroHs"
         VERBATIM
     )
 
-    add_custom_target(mhs_build ALL
-        DEPENDS ${OUTPUT_HEADER} ${OUTPUT_LIB}
+    add_custom_command(
+        OUTPUT ${EVAL_O}
+        DEPENDS ${REPL_C}
+        COMMAND ${CMAKE_C_COMPILER} -w -Wall -O3 -c
+                -I${MICROHS_SRC_DIR}/src/runtime
+                -I${MICROHS_SRC_DIR}/src/runtime/unix
+                -D__MHS__
+                ${MICROHS_SRC_DIR}/src/runtime/eval.c
+                -o ${EVAL_O}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        VERBATIM
     )
 
-    install(FILES ${OUTPUT_HEADER} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-    install(FILES ${OUTPUT_LIB} DESTINATION ${CMAKE_INSTALL_LIBDIR})
-endfunction()
+    add_custom_command(
+        OUTPUT ${REPL_O}
+        DEPENDS ${REPL_C}
+        COMMAND ${CMAKE_C_COMPILER} -w -Wall -O3 -c
+                -I${MICROHS_SRC_DIR}/src/runtime
+                -I${MICROHS_SRC_DIR}/src/runtime/unix
+                -D__MHS__
+                ${REPL_C}
+                -o ${REPL_O}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        VERBATIM
+    )
 
+    add_library(mhs_obj STATIC ${REPL_O} ${EVAL_O})
+    add_dependencies(mhs_obj MicroHsProject)
+
+    set(MHS_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR} PARENT_SCOPE)
+    set(MHS_OBJ mhs_obj PARENT_SCOPE)
+    set_source_files_properties(${REPL_O} ${EVAL_O} PROPERTIES GENERATED TRUE)
+    set_target_properties(mhs_obj PROPERTIES LINKER_LANGUAGE C)
+endfunction()
