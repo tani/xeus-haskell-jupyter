@@ -14,13 +14,19 @@ function(fetch_and_build_microhs MICROHS_BIN MICROHS_SRC_DIR)
       set(MICROHS_SUFFIX "")
     endif()
 
+    if(EMSCRIPTEN)
+      set(HOST_ENV "EMSCRIPTEN=1" "CC=gcc" "CXX=g++" "LD=ld")
+    else()
+      set(HOST_ENV "EMSCRIPTEN=0")
+    endif()
+
     ExternalProject_Add(MicroHsProject
         URL ${MICROHS_URL}
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         BUILD_IN_SOURCE TRUE
         PREFIX ${MICROHS_PREFIX}
         CONFIGURE_COMMAND ""
-        BUILD_COMMAND ${MICROHS_MAKE} -f ${MICROHS_MAKEFILE}
+        BUILD_COMMAND ${CMAKE_COMMAND} -E env ${HOST_ENV} ${MICROHS_MAKE} -f ${MICROHS_MAKEFILE}
         INSTALL_COMMAND ""
     )
 
