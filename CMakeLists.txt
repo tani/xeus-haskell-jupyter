@@ -303,7 +303,9 @@ if(EMSCRIPTEN)
     add_executable(xhaskell src/main_emscripten_kernel.cpp )
     target_link_libraries(xhaskell PRIVATE xeus-lite)
     target_compile_options(xhaskell PRIVATE -fPIC)
-    target_link_libraries(xhaskell PRIVATE mhs_repl_lib)
+    # mhs_repl_lib is already pulled in transitively via xeus-haskell-static,
+    # so linking it explicitly here would add it twice and cause duplicate symbols
+    # target_link_libraries(xhaskell PRIVATE mhs_repl_lib)
     XEUS_HASKELL_set_kernel_options(xhaskell)
     xeus_wasm_compile_options(xhaskell)
     xeus_wasm_link_options(xhaskell "web,worker")
