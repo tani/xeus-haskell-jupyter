@@ -191,6 +191,10 @@ MicroHsRepl::MicroHsRepl() {
         mhs_repl_initialized = true;
     }
     context = mhs_repl_new();
+
+    // Warm up MicroHs so the first user execute doesn't pay all init costs.
+    auto warmup = execute("0");
+    (void)warmup;
 }
 
 MicroHsRepl::~MicroHsRepl() {
@@ -252,4 +256,3 @@ std::expected<std::string, std::string> MicroHsRepl::run(std::string_view code) 
 }
 
 } // namespace xeus_haskell
-
