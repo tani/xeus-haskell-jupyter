@@ -116,8 +116,11 @@ runReplAction act h srcPtr srcLen errPtr = do
   ref <- deRefStablePtr h
   src <- peekSource srcPtr srcLen
   ctx <- readIORef ref
-  result <- act ctx src
-  case result of
+  result <- try (act ctx src)
+  let normalized = case result of
+        Left (ex :: SomeException) -> Left (ReplRuntimeError (displayException ex))
+        Right r -> r
+  case normalized of
     Left e -> writeErrorCString errPtr (prettyReplError e) >> pure c_ERR
     Right ctx' -> writeIORef ref ctx' >> pure c_OK
 

@@ -74,6 +74,14 @@ int main() {
         expect_trim_eq(res.output, "30");
     };
 
+    "expression errors are reported"_test = [] {
+        announce("expression errors are reported");
+        auto& repl = repl_instance();
+        auto res = repl.execute("1 + \"1\"");
+        expect(!res.ok);
+        expect(!res.error.empty());
+    };
+
     "measure warm-up timing"_test = [] {
         announce("measure warm-up timing");
         auto& repl = repl_instance();
