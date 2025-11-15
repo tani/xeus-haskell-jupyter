@@ -28,10 +28,6 @@ auto expect_trim_eq = [](std::string_view a, std::string_view b) {
     expect(eq(trim(a), trim(b))) << "expected (ignoring spaces): " << a << " == " << b;
 };
 
-auto announce = [](std::string_view name) {
-  std::log << "[test] " << name << "\n";
-};
-
 auto repl_instance = []() -> xeus_haskell::MicroHsRepl& {
     static xeus_haskell::MicroHsRepl repl;
     return repl;
@@ -39,7 +35,6 @@ auto repl_instance = []() -> xeus_haskell::MicroHsRepl& {
 
 int main() {
     "positive repl test"_test = [] {
-        announce("positive repl test");
         auto& repl = repl_instance();
         auto result = repl.execute("1 + 1");
 
@@ -48,7 +43,6 @@ int main() {
     };
 
     "stdout is captured"_test = [] {
-        announce("stdout is captured");
         auto& repl = repl_instance();
         auto res = repl.execute("putStrLn \"hello from repl\"");
         expect(res.ok);
@@ -56,7 +50,6 @@ int main() {
     };
 
     "definitions persist"_test = [] {
-        announce("definitions persist");
         auto& repl = repl_instance();
         auto def_result = repl.execute("xh_def_test = 40 + 2");
         expect(def_result.ok);
@@ -67,7 +60,6 @@ int main() {
     };
 
     "redefinitions replace old values"_test = [] {
-        announce("redefinitions replace old values");
         auto& repl = repl_instance();
         auto first = repl.execute("xh_redef_test = 1");
         expect(first.ok);
@@ -81,7 +73,6 @@ int main() {
     };
 
     "expressions evaluate"_test = [] {
-        announce("expressions evaluate");
         auto& repl = repl_instance();
         auto res = repl.execute("let (a, b) = (10, 20) in a + b");
         expect(res.ok);
@@ -89,7 +80,6 @@ int main() {
     };
 
     "expression errors are reported"_test = [] {
-        announce("expression errors are reported");
         auto& repl = repl_instance();
         auto res = repl.execute("1 + \"1\"");
         expect(!res.ok);
@@ -97,7 +87,6 @@ int main() {
     };
 
     "measure warm-up timing"_test = [] {
-        announce("measure warm-up timing");
         auto& repl = repl_instance();
         auto measure = [&](std::string_view code) {
             const auto start = std::chrono::steady_clock::now();
@@ -118,13 +107,11 @@ int main() {
     };
 
     "basic test"_test = [] {
-        announce("basic test");
         expect(42_i == 42);
         expect(1_i != 2);
     };
 
     "sum test"_test = [] {
-        announce("sum test");
         constexpr auto sum = [](auto... values) { return (values + ...); };
         expect(sum(1, 2) == 3_i);
         expect(sum(0) == 0_i);
