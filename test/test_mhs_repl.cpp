@@ -29,7 +29,7 @@ auto expect_trim_eq = [](std::string_view a, std::string_view b) {
 };
 
 auto announce = [](std::string_view name) {
-    log << "[test] " << name << "\n";
+  std::log << "[test] " << name << "\n";
 };
 
 auto repl_instance = []() -> xeus_haskell::MicroHsRepl& {
