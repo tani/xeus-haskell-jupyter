@@ -309,6 +309,11 @@ if(EMSCRIPTEN)
     XEUS_HASKELL_set_kernel_options(xhaskell)
     xeus_wasm_compile_options(xhaskell)
     xeus_wasm_link_options(xhaskell "web,worker")
+    target_link_options(xhaskell
+      PUBLIC --bind
+      PUBLIC "SHELL: -sWASMFS"
+      PUBLIC "SHELL: --post-js ${CMAKE_CURRENT_SOURCE_DIR}/src/post.js"
+    )
 endif()
 
 # Installation
