@@ -22,9 +22,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Get number of CPU cores
-        uses: SimenB/github-actions-cpu-cores@v2
-
       - name: Install micromamba
         uses: mamba-org/setup-micromamba@v1
         with:
@@ -72,9 +69,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Get number of CPU cores
-        uses: SimenB/github-actions-cpu-cores@v2
-
       - name: Install micromamba
         uses: mamba-org/setup-micromamba@v1
         with:
@@ -88,22 +82,24 @@ jobs:
         run: |
           micromamba create -f environment-wasm-host.yml --platform=emscripten-wasm32
 
-          mkdir build
-          pushd build
-
           export EMPACK_PREFIX=$MAMBA_ROOT_PREFIX/envs/xeus-haskell-wasm-build
           export PREFIX=$MAMBA_ROOT_PREFIX/envs/xeus-haskell-wasm-host
           export CMAKE_PREFIX_PATH=$PREFIX
           export CMAKE_SYSTEM_PREFIX_PATH=$PREFIX
+          export BUILD_DIR=/tmp/xeus-haskell-build
+
+          mkdir $BUILD_DIR
 
           unset CFLAGS CXXFLAGS LDFLAGS
 
           emcmake cmake \
+            -S . \
+            -B $BUILD_DIR \
             -DCMAKE_BUILD_TYPE=Release                        \
             -DCMAKE_PREFIX_PATH=$PREFIX                       \
             -DCMAKE_INSTALL_PREFIX=$PREFIX                    \
-            -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ON            \
-            ..
+            -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ON
 
-          make -j${{ steps.cpu-cores.outputs.count }}
+          cmake --build $BUILD_DIR
+          cmake --install $BUILD_DIR
 
