@@ -67,6 +67,10 @@ jupyter_server = "*"
 emscripten_emscripten-wasm32 = "==3.1.73"
 
 [feature.wasm-build.tasks]
+fix-emscripten-links = """
+cd "$CONDA_PREFIX/__clobbers__/emscripten_emscripten-wasm32/bin" &&
+sh -c 'find . -type l -exec ln -sf ../../../opt/emsdk/upstream/bin/{} {} \\;'
+"""
 prebuild = """
 export PREFIX="$CONDA_PREFIX/../wasm-host";
 emcmake cmake
@@ -85,15 +89,15 @@ emcmake cmake
 build = "emmake make -C wasm-build"
 install = "emmake make -C wasm-build install"
 serve = """
-export MHSDIR=$PWD/wasm-build/michrohs/src/MicroHsProject;
-export PREFIX=$CONDA_PREFIX/../wasm-host;
+export MHSDIR=$PWD/wasm-build/microhs/src/MicroHsProject;
+export PREFIX="$CONDA_PREFIX/../wasm-host";
 jupyter lite serve
-  --XeusAddon.prefix=$PREFIX
-  --XeusAddon.mounts=$MHSDIR:$MHSDIR
+  --XeusAddon.prefix="$PREFIX"
+  --XeusAddon.mounts="$MHSDIR:$MHSDIR"
   --contents notebooks/introduction_to_haskell.ipynb
 """
 generate = """
-export MHSDIR=$PWD/wasm-build/michrohs/src/MicroHsProject;
+export MHSDIR=$PWD/wasm-build/microhs/src/MicroHsProject;
 export PREFIX=$CONDA_PREFIX/../wasm-host;
 jupyter lite build
   --XeusAddon.prefix=$PREFIX
