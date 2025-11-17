@@ -5,47 +5,34 @@
 `xeus-haskell` is a Jupyter kernel for haskell based on the native implementation of the
 Jupyter protocol [xeus](https://github.com/jupyter-xeus/xeus).
 
-## Installation
+## Quickstart
 
-xeus-haskell has not been packaged for the mamba (or conda) package manager.
+### For native JupyterLab
 
-To ensure that the installation works, it is preferable to install `xeus-haskell` in a
-fresh environment. It is also needed to use a
-[miniforge](https://github.com/conda-forge/miniforge#mambaforge) or
-[miniconda](https://conda.io/miniconda.html) installation because with the full
-[anaconda](https://www.anaconda.com/) you may have a conflict with the `zeromq` library
-which is already installed in the anaconda distribution.
+```
+# Install Pixi
+# curl -fsSL https://pixi.sh/install.sh | sh
 
-The safest usage is to create an environment named `xeus-haskell`
-
-```bash
-mamba create -n  `xeus-haskell`
-source activate  `xeus-haskell`
+git clone https://github.com/tani/xeus-haskell
+pushd xeus-haskell
+pixi run -e dev prebuild
+pixi run -e dev build
+pixi run -e dev install
+pixi run -e dev serve # JupyterLab is ready!
 ```
 
-<!-- ### Installing from conda-forge
+### For webassembly JupyterLite
 
-Then you can install in this environment `xeus-haskell` and its dependencies
-
-```bash
-mamba install`xeus-haskell` notebook -c conda-forge
-``` -->
-
-### Installing from source
-
-Or you can install it from the sources, you will first need to install dependencies
-
-```bash
-mamba install cmake cxx-compiler xeus-zmq nlohmann_json cppzmq xtl jupyterlab -c conda-forge
 ```
+# Install Pixi
+# curl -fsSL https://pixi.sh/install.sh | sh
 
-Then you can compile the sources (replace `$CONDA_PREFIX` with a custom installation
-prefix if need be)
-
-```bash
-mkdir build && cd build
-cmake .. -D CMAKE_PREFIX_PATH=$CONDA_PREFIX -D CMAKE_INSTALL_PREFIX=$CONDA_PREFIX -D CMAKE_INSTALL_LIBDIR=lib
-make && make install
+git clone https://github.com/tani/xeus-haskell
+pushd xeus-haskell
+pixi run -e wasm-host prebuild
+pixi run -e wasm-build prebuild
+pixi run -e wasm-build build
+pixi run -e wasm-build serve # JupyterLite is ready!
 ```
 
 ## Trying it online

@@ -3,10 +3,24 @@ authors = ["TANIGUCHI Masaya <ta2gch@gmail.com>"]
 channels = ["conda-forge"]
 name = "xeus-haskell"
 version = "0.1.0"
+platforms = []
 
 # [tasks]
 
 # [dependencies]
+
+#
+# docs
+[feature.docs]
+platforms = ["linux-64", "osx-arm64"]
+channels = ["conda-forge"]
+
+[feature.docs.dependencies]
+mkdocs = "*"
+mkdocs-material = "*"
+
+[feature.docs.pypi-dependencies]
+mkdocs-mermaid2-plugin = ">=1.2.3, <2"
 
 #
 # dev
@@ -28,10 +42,11 @@ jupyter_kernel_test = ">=0.4.3"
 nbval = "*"
 pytest-rerunfailures = "*"
 micromamba = "*"
+jupyterlab = "*"
 
 [feature.dev.tasks]
 prebuild = """
-cmake 
+cmake
   -S $PWD
   -B build
   -DCMAKE_BUILD_TYPE=Release
@@ -43,6 +58,7 @@ build = "cmake --build build"
 install = "cmake --install build"
 ctest = "ctest --test-dir build"
 pytest = "pytest"
+serve = "jupyter lab"
 
 #
 # wasm-build
@@ -64,22 +80,31 @@ emscripten_emscripten-wasm32 = "==3.1.73"
 
 [feature.wasm-build.tasks]
 prebuild = """
+export PREFIX="$CONDA_PREFIX/../wasm-host"
 unset CFLAGS CXXFLAGS LDFLAGS;
 emcmake cmake
   -S $PWD
   -B wasm-build
   -DCMAKE_BUILD_TYPE=Release
-  -DCMAKE_INSTALL_PREFIX="$CONDA_PREFIX/../wasm-host"
-  -DCMAKE_PREFIX_PATH="$CONDA_PREFIX/../wasm-host"
+  -DCMAKE_INSTALL_PREFIX="$PREFIX"
+  -DCMAKE_PREFIX_PATH="$PREFIX"
   -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ON
 """
 build = "emmake make -C wasm-build"
 install = "emmake make -C wasm-build install"
+serve = """
+export MHSDIR=$PWD/wasm-build/michrohs/src/MicroHsProject;
+export PREFIX=$CONDA_PREFIX/../wasm-host;
+jupyter lite serve
+  --XeusAddon.prefix=$PREFIX
+  --XeusAddon.mounts=$MHSDIR:$MHSDIR
+  --contents notebooks/introduction_to_haskell.ipynb
+"""
 generate = """
 export MHSDIR=$PWD/wasm-build/michrohs/src/MicroHsProject;
 export PREFIX=$CONDA_PREFIX/../wasm-host;
-jupyter lite build 
-  --XeusAddon.prefix=$PREFIX 
+jupyter lite build
+  --XeusAddon.prefix=$PREFIX
   --XeusAddon.mounts=$MHSDIR:$MHSDIR
   --contents notebooks/introduction_to_haskell.ipynb
 """
@@ -106,6 +131,7 @@ prebuild = "echo ok"
 #
 
 [environments]
+docs = { features = ["docs"], no-default-feature = true }
 dev = { features = ["dev"], no-default-feature = true }
 wasm-build = { features = ["wasm-build"], no-default-feature = true }
 wasm-host = { features = ["wasm-host"], no-default-feature = true }
