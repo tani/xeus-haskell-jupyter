@@ -212,5 +212,32 @@ class XHaskellKernelTests(jupyter_kernel_test.KernelTests):
         self.assertIn("Hello", payload)
         self.assertIn("World", payload)
 
+    def test_mixed_definition_and_pure_expression(self) -> None:
+        """Edge Case: Pure expression following a definition (no IO)."""
+        self.flush_channels()
+        code = 'xh_edge_x = 10\nxh_edge_x + 32'
+        reply, outputs = self._execute_or_skip(code=code)
+        self.assertEqual(reply["content"]["status"], "ok")
+        payload = self._extract_plain_text(outputs)
+        self.assertIn("42", payload)
+
+    def test_simple_pure_expression(self) -> None:
+        """Ensure a single pure expression still works (was an edge case in redesign)."""
+        self.flush_channels()
+        code = '21 + 21'
+        reply, outputs = self._execute_or_skip(code=code)
+        self.assertEqual(reply["content"]["status"], "ok")
+        payload = self._extract_plain_text(outputs)
+        self.assertIn("42", payload)
+
+    def test_multi_line_definition_followed_by_expression(self) -> None:
+        """Edge Case: Multi-line definition (layout) followed by an expression."""
+        self.flush_channels()
+        code = 'xh_multi_f x =\n  x * 2\nxh_multi_f 21'
+        reply, outputs = self._execute_or_skip(code=code)
+        self.assertEqual(reply["content"]["status"], "ok")
+        payload = self._extract_plain_text(outputs)
+        self.assertIn("42", payload)
+
 if __name__ == "__main__":
     unittest.main()

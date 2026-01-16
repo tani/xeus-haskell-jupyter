@@ -297,15 +297,21 @@ replExecute ctx snippet = do
             if canParseDefinition candidateDefs
               then if all allwsLine runLines
                    then replDefine ctx defPart
-                   else
-                     let runBlock = "do\n" ++ indent runPart
-                     in if canParseExpression runBlock
+                   else if canParseExpression runPart
                         then do
                           eCtx' <- replDefine ctx defPart
                           case eCtx' of
                             Left err -> pure (Left err)
-                            Right ctx' -> replRun ctx' runBlock
-                        else go (n - 1)
+                            Right ctx' -> replRun ctx' runPart
+                        else
+                          let runBlock = "do\n" ++ indent runPart
+                          in if canParseExpression runBlock
+                             then do
+                               eCtx' <- replDefine ctx defPart
+                               case eCtx' of
+                                 Left err -> pure (Left err)
+                                 Right ctx' -> replRun ctx' runBlock
+                             else go (n - 1)
               else go (n - 1)
   go (length ls)
 
