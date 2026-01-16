@@ -46,6 +46,17 @@ To try out xeus-haskell interactively in your web browser, just click on the lin
 
 [Jupyterlite for Haskell](https://jupyter-xeus.github.io/xeus-haskell)
 
+## Features
+
+`xeus-haskell` provides a rich interactive environment for Haskell:
+
+- **Incremental Execution**: State (definitions and types) is preserved across multiple cells.
+- **Mixed Content Support**: Support for cells containing both definitions and expressions (GHCi-style).
+- **Shift+Tab Introspection**: Quick access to type signatures and kinds for identifiers.
+- **Tab Completion**: Intelligent completion suggestions for Haskell identifiers.
+- **Rich Display System**: Integrated support for rendering HTML, LaTeX, and Markdown via the `Display` typeclass.
+- **Cross-Platform**: Works natively on Linux, macOS, Windows, and in the browser via WebAssembly (JupyterLite).
+
 ## Dependencies
 
 `xeus-haskell` depends on

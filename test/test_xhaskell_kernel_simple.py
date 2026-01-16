@@ -239,5 +239,45 @@ class XHaskellKernelTests(jupyter_kernel_test.KernelTests):
         payload = self._extract_plain_text(outputs)
         self.assertIn("42", payload)
 
+    def test_inspect_simple_variable(self) -> None:
+        """Verify Shift+Tab introspection for a user-defined variable."""
+        self.flush_channels()
+        self._execute_or_skip(code="xh_inspect_x = 42")
+        
+        msg_id = self.kc.inspect(code="xh_inspect_x", cursor_pos=5)
+        try:
+            reply_msg = self.kc.get_shell_msg(timeout=jupyter_kernel_test.TIMEOUT)
+        except Empty:
+            self.skipTest("xhaskell kernel timed out while inspecting")
+            return
+
+        self.assertEqual(reply_msg["content"]["status"], "ok")
+        self.assertTrue(reply_msg["content"]["found"])
+        data = reply_msg["content"]["data"]
+        # MicroHs shows the polymorphic type for 42: (forall a . ((Num a) => a))
+        self.assertIn("xh_inspect_x ::", data["text/plain"])
+        self.assertIn("Num", data["text/plain"])
+
+    def test_inspect_builtin_function(self) -> None:
+        """Verify Shift+Tab introspection for a built-in function."""
+        self.flush_channels()
+        # Warm up if necessary
+        self._execute_or_skip(code="0")
+        
+        msg_id = self.kc.inspect(code="putStrLn", cursor_pos=4)
+        try:
+            reply_msg = self.kc.get_shell_msg(timeout=jupyter_kernel_test.TIMEOUT)
+        except Empty:
+            self.skipTest("xhaskell kernel timed out while inspecting")
+            return
+
+        self.assertEqual(reply_msg["content"]["status"], "ok")
+        self.assertTrue(reply_msg["content"]["found"])
+        data = reply_msg["content"]["data"]
+        # MicroHs might show it as ([Char]) -> (IO ())
+        self.assertIn("putStrLn ::", data["text/plain"])
+        self.assertIn("[Char]", data["text/plain"])
+        self.assertIn("IO", data["text/plain"])
+
 if __name__ == "__main__":
     unittest.main()

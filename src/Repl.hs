@@ -8,7 +8,8 @@ module Repl (
   mhsReplFreeCString,
   mhsReplCanParseDefinition,
   mhsReplCanParseExpression,
-  mhsReplCompletionCandidates
+  mhsReplCompletionCandidates,
+  mhsReplInspect
 ) where
 
 import qualified Prelude ()
@@ -28,15 +29,16 @@ import Foreign.Storable (poke)
 import MicroHs.Builtin (builtinMdl)
 import MicroHs.Compile (Cache, compileModuleP, compileToCombinators, emptyCache)
 import MicroHs.CompileCache (cachedModules)
+import MicroHs.SymTab (SymTab, Entry(..), stLookup, stEmpty)
 import MicroHs.Desugar (LDef)
 import MicroHs.Exp (Exp(Var))
-import MicroHs.Expr (EModule(..), EDef(..), ImpType(..), patVars)
+import MicroHs.Expr (EModule(..), EDef(..), ImpType(..), patVars, showExpr)
 import MicroHs.Flags (Flags, defaultFlags)
 import MicroHs.Ident (Ident, mkIdent, qualIdent, unQualIdent, SLoc(..))
 import qualified MicroHs.IdentMap as IMap
 import MicroHs.Parse (parse, pExprTop, pTopModule)
 import MicroHs.StateIO (runStateIO)
-import MicroHs.TypeCheck (TModule(..), tBindingsOf)
+import MicroHs.TypeCheck (TModule(..), tBindingsOf, Symbols)
 import MicroHs.Translate (TranslateMap, translateMap, translateWithMap)
 import Unsafe.Coerce (unsafeCoerce)
 import MicroHs.Lex
@@ -69,12 +71,13 @@ data ReplCtx = ReplCtx
   { rcFlags :: Flags
   , rcCache :: Cache
   , rcDefs  :: [StoredDef]
+  , rcSyms  :: Symbols
   }
 
 initialCtx :: String -> IO ReplCtx
 initialCtx dir = do
   let flags = defaultFlags dir
-  pure ReplCtx { rcFlags = flags, rcCache = emptyCache, rcDefs = [] }
+  pure ReplCtx { rcFlags = flags, rcCache = emptyCache, rcDefs = [], rcSyms = (stEmpty, stEmpty) }
 
 defsSource :: [StoredDef] -> String
 defsSource = concatMap sdCode
@@ -132,7 +135,8 @@ foreign export ccall "mhs_repl_execute"     mhsReplExecute      :: ReplHandle ->
 foreign export ccall "mhs_repl_free_cstr"   mhsReplFreeCString  :: CString -> IO ()
 foreign export ccall "mhs_repl_can_parse_definition" mhsReplCanParseDefinition :: CString -> CSize -> IO CInt
 foreign export ccall "mhs_repl_can_parse_expression" mhsReplCanParseExpression :: CString -> CSize -> IO CInt
-foreign export ccall "mhs_repl_completion_candidates" mhsReplCompletionCandidates :: ReplHandle-> IO ()
+foreign export ccall "mhs_repl_completion_candidates" mhsReplCompletionCandidates :: ReplHandle -> IO ()
+foreign export ccall "mhs_repl_inspect" mhsReplInspect :: ReplHandle -> CString -> CSize -> Ptr CString -> IO CInt
 
 mhsReplNew :: CString -> CSize -> IO ReplHandle
 mhsReplNew cstr csize = do
@@ -206,15 +210,14 @@ ensureTrailingNewline s
   | otherwise      = s ++ "\n"
 
 
-compileModule :: ReplCtx -> String -> IO (Either ReplError (TModule [LDef], Cache))
 compileModule ctx src =
   case parse pTopModule "<repl>" src of
     Left perr -> pure (Left (ReplParseError perr))
     Right mdl -> do
       r <- runStateIO (compileModuleP (rcFlags ctx) ImpNormal mdl) (rcCache ctx)
-      let (((dmdl, _, _, _, _), _), cache') = unsafeCoerce r
+      let (((dmdl, syms, _, _, _), _), cache') = unsafeCoerce r
           cmdl = compileToCombinators dmdl
-      pure (Right (cmdl, cache'))
+      pure (Right (cmdl, cache', syms))
 
 runAction :: Cache -> TModule [LDef] -> Ident -> IO (Either ReplError ())
 runAction cache cmdl ident = do
@@ -247,7 +250,7 @@ replDefine ctx snippet = do
       cm <- compileModule ctx (moduleFromDefs defsWithNew)
       case cm of
         Left err'          -> pure (Left err')
-        Right (_, cache') -> pure (Right ctx{ rcDefs = defsWithNew, rcCache = cache' })
+        Right (_, cache', syms') -> pure (Right ctx{ rcDefs = defsWithNew, rcCache = cache', rcSyms = syms' })
 
 replRun :: ReplCtx -> String -> IO (Either ReplError ReplCtx)
 replRun ctx stmt = do
@@ -256,11 +259,11 @@ replRun ctx stmt = do
   cm <- compileModule ctx src
   case cm of
     Left err -> pure (Left err)
-    Right (cmdl, cache') -> do
+    Right (cmdl, cache', syms') -> do
       r <- runAction cache' cmdl runResultIdent
       case r of
         Left e  -> pure (Left e)
-        Right _ -> pure (Right ctx{ rcCache = cache' })
+        Right _ -> pure (Right ctx{ rcCache = cache', rcSyms = syms' })
 
 --------------------------------------------------------------------------------
 -- Public FFI API
@@ -274,6 +277,26 @@ mhsReplRun = runReplAction replRun
 
 mhsReplExecute :: ReplHandle -> CString -> CSize -> Ptr CString -> IO CInt
 mhsReplExecute = runReplAction replExecute
+
+mhsReplInspect :: ReplHandle -> CString -> CSize -> Ptr CString -> IO CInt
+mhsReplInspect h srcPtr srcLen resPtr = do
+  ref <- deRefStablePtr h
+  name <- peekSource srcPtr srcLen
+  ctx <- readIORef ref
+  result <- replInspect ctx name
+  case result of
+    Left e -> writeErrorCString resPtr (prettyReplError e) >> pure c_ERR
+    Right info -> newCString info >>= poke resPtr >> pure c_OK
+
+replInspect :: ReplCtx -> String -> IO (Either ReplError String)
+replInspect ctx name = do
+  let ident = mkIdent name
+      (typeTable, valueTable) = rcSyms ctx
+  case stLookup "value" ident valueTable of
+    Right (Entry _ sigma) -> return (Right $ name ++ " :: " ++ showExpr sigma)
+    Left _ -> case stLookup "type" ident typeTable of
+      Right (Entry _ kind) -> return (Right $ name ++ " :: " ++ showExpr kind)
+      Left _ -> return (Left $ ReplRuntimeError $ "Identifier not found: " ++ name)
 
 isws :: Char -> Bool
 isws c = c == ' ' || c == '\t' || c == '\n' || c == '\r'

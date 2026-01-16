@@ -80,9 +80,10 @@ State is maintained through a persistent `ReplCtx` structure in `Repl.hs`:
 
 ```haskell
 data ReplCtx = ReplCtx
-  { rcFlags :: Flags      -- Compilation flags
-  , rcCache :: Cache      -- MicroHs compiler cache
-  , rcDefs  :: [StoredDef] -- List of user-defined snippets
+  { rcFlags :: Flags       -- Compilation flags
+  , rcCache :: Cache       -- MicroHs compiler cache
+  , rcDefs  :: [StoredDef]  -- List of user-defined snippets
+  , rcSyms  :: Symbols     -- Persistent symbol tables for introspection
   }
 ```
 

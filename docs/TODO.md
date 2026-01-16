@@ -5,7 +5,7 @@ This document tracks planned improvements and currently missing features for `xe
 ## Core Kernel Features
 
 - [ ] **`is_complete` implementation**: Currently, the kernel does not correctly signal if a multi-line input is complete or needs more lines in the console.
-- [ ] **`inspect_request`**: Support for "Introspection" (Shift+Tab in Jupyter) to show documentation or type signatures for identifiers.
+- [x] **`inspect_request`**: Support for "Introspection" (Shift+Tab in Jupyter) to show documentation or type signatures for identifiers.
 - [ ] **`history_request`**: Implementation of the Jupyter history protocol to allow searching and retrieving previous cell inputs.
 - [ ] **Advanced Completion**: Improve `completion_request` to support qualified names (e.g., `Prelude.putStrLn`) and type-aware suggestions.
 - [ ] **Kernel Interrupt**: Add support for interrupting long-running Haskell executions (SIGINT handling).
