@@ -14,22 +14,65 @@ Unlike kernels based on GHC, `xeus-haskell` leverages **MicroHs**, a minimal Has
 
 ---
 
-## Execution Flow
+### High-Level Sequence
 
-When a user executes a cell in Jupyter, the following sequence occurs:
+```mermaid
+sequenceDiagram
+    participant J as Jupyter Frontend
+    participant X as Xeus Interpreter (C++)
+    participant B as C++ REPL Bridge
+    participant H as MicroHs Backend (Haskell)
 
-1. **Reception**: `xinterpreter::execute_request_impl` receives the code snippet.
-2. **Dispatch**: The code is passed to `MicroHsRepl::execute`.
-3. **Analysis**: The Haskell backend (`Repl.hs`) analyzes the snippet to determine if it is a **definition** or an **expression**.
-4. **Wait for Result**: The C++ bridge redirects `stdout` to a pipe before calling the Haskell execution function.
-5. **Return**: The captured output (and any errors) is sent back to the Jupyter frontend.
+    J->>X: execute_request(code)
+    X->>B: execute(code)
+    B->>B: Redirect stdout to Pipe
+    B->>H: replExecute(code)
+    loop Split Analysis
+        H->>H: Scan & Split (Definitions / Block)
+    end
+    H->>H: Compile Definitions
+    H->>H: Execute Expression / IO
+    H-->>B: Return Status
+    B-->>B: Restore stdout & Read Pipe
+    B-->>X: return output & status
+    X-->>J: execute_reply + stdout stream
+```
 
-### 1. Definition vs. Expression Detection
+### 1. Mixed cell support (Scan and Split)
 
-The REPL uses the MicroHs parser to classify the input:
+Unlike standard REPLs that might expect a single statement per line, `xeus-haskell` supports cells containing a mix of definitions and expressions. It applies a **Scan and Split** algorithm to determine the execution boundary:
 
-- **Definition**: Functions, data types, type aliases, or pattern bindings (e.g., `f x = x + 1` or `data Color = Red | Blue`).
-- **Expression**: Values or IO actions to be evaluated (e.g., `f 10` or `putStrLn "hello"`).
+```mermaid
+flowchart TD
+    Start([Receive Cell Code]) --> Split[Split into lines]
+    Split --> Loop{Iterate n from total to 0}
+    Loop --> TryDef[Try First n lines as Definitions]
+    TryDef --> IsDef{Is Valid Definition?}
+    
+    IsDef -- Yes --> CheckRem{Any lines remaining?}
+    CheckRem -- No --> Commit[Commit Definitions]
+    CheckRem -- Yes --> TryExpr[Try remaining as Raw Expression]
+    
+    TryExpr -- Success --> RunDirect[Commit Defs + Run Expression]
+    TryExpr -- Failure --> TryDo[Wrap remaining in 'do' block]
+    
+    TryDo -- Success --> RunDo[Commit Defs + Run do-block]
+    TryDo -- Failure --> Next[n = n - 1]
+    
+    Next --> Loop
+    IsDef -- No --> Next
+    
+    Commit --> End([Success])
+    RunDirect --> End
+    RunDo --> End
+    Loop -- n < 0 --> Error([Parse Error])
+```
+
+1. **Greedy Prefix Search**: The kernel scans the cell line-by-line from the bottom up to find the largest prefix that forms a valid set of Haskell definitions.
+2. **Definition Processing**: Any lines identified as definitions are appended to the persistent context and compiled.
+3. **Expression Execution**: The remaining lines (the "execution block") are processed as follows:
+    - **Raw Expression**: First, the kernel tries to parse the block as a single pure expression (e.g., `1 + 1`).
+    - **Monadic `do`-wrapping**: If it's not a single expression, the kernel wraps the block in a `do` block (e.g., for multiple `putStrLn` calls) to allow sequential IO execution.
 
 ### 2. State Maintenance (The persistent Context)
 
@@ -54,11 +97,11 @@ When a definition is entered:
 
 #### Handling Expressions
 
-When an expression is entered:
+When an execution block is entered:
 
-1. **Wrapping**: The expression is wrapped in a temporary `runResult` function inside the "Inline" module.
+1. **Wrapping**: If the block was identified as requiring monadic execution, it is wrapped in an artificial `do` block and then placed into a temporary `runResult` function inside the "Inline" module.
 2. **Execution wrapper**: It uses `_printOrRun` to correctly handle both pure values (printing them) and `IO` actions (executing them).
-3. **Evaluation**: The temporary module is compiled and executed in the current runtime state.
+3. **Evaluation**: The temporary module is compiled and executed. Because the previous definitions in the same cell were already committed to the cache in the "Handling Definitions" phase, the expression has access to them immediately.
 
 ---
 
