@@ -12,6 +12,13 @@ class KernelTests(jupyter_kernel_test.KernelTests):
     complete_code_samples = ["1+1"]
     incomplete_code_samples = ["[1,2,3"]
     invalid_code_samples = ["let x ="]
+    code_execute_result = [
+        {"code": "2 + 2", "result": "4\n"},
+        {"code": "reverse \"olleh\"", "result": "\"hello\"\n"},
+        {"code": "[1, 2, 3]", "result": "[1,2,3]\n"}
+    ]
+    code_generate_error = "error \"boom\""
+    code_history_pattern = "1+1"
     code_inspect_sample = "putStrLn"
 
     def test_stdout(self):
