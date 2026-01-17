@@ -211,7 +211,7 @@ indent = unlines . map ("  " ++) . lines
 
 runBlock :: String -> String
 runBlock stmt = unlines
-  [ "_myPrintOrRun :: (Typeable a, Show a) => a -> IO ()"
+  [ "_myPrintOrRun :: (Typeable a, PrintOrRun a) => a -> IO ()"
   , "_myPrintOrRun x ="
   , "  case cast x of"
   , "    Just (io :: IO ()) -> io"

@@ -181,4 +181,23 @@ data XhTypeableRecord = XhTypeableRecord
         expect(sum(0) == 0_i);
     };
 
+    "io unit side effect separation"_test = [] {
+        auto& repl = repl_instance();
+        // IO () should run (stdout) and have empty result
+        auto res = repl.execute("putStr \"side\"");
+        expect(res.ok);
+        // "side" should be in stdout, not result
+        expect(res.stdout_output == "side");
+        expect(res.result_content == "");
+    };
+
+    "pure value wrapped"_test = [] {
+        auto& repl = repl_instance();
+        auto res = repl.execute("42");
+        expect(res.ok);
+        // stdout empty, result "42"
+        expect(res.stdout_output == "");
+        expect_trim_eq(res.result_content, "42");
+    };
+
 }
