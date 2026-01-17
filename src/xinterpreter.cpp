@@ -58,7 +58,7 @@ void interpreter::execute_request_impl(send_reply_callback cb,
     const std::string &output = exec_result.output;
     if (!output.empty()) {
       nl::json pub_data;
-      pub_data["text/plain"] = output;
+      pub_data[exec_result.mime_type] = output;
       publish_execution_result(execution_counter, std::move(pub_data),
                                nl::json::object());
     }
