@@ -39,21 +39,21 @@ int main() {
         auto result = repl.execute("1 + 1");
 
         expect(result.ok);
-        expect_trim_eq(result.output, "2");
+        expect_trim_eq(result.result_content, "2");
     };
 
     "stdout is captured"_test = [] {
         auto& repl = repl_instance();
         auto res = repl.execute("putStrLn \"hello from repl\"");
         expect(res.ok);
-        expect(that % res.output.find("hello from repl") != std::string::npos);
+        expect(that % res.stdout_output.find("hello from repl") != std::string::npos);
     };
 
     "leading comment expressions execute"_test = [] {
         auto& repl = repl_instance();
         auto res = repl.execute("-- Hello World\nprint \"Hello World!\"");
         expect(res.ok) << res.error;
-        expect(that % res.output.find("Hello World!") != std::string::npos);
+        expect(that % res.stdout_output.find("Hello World!") != std::string::npos);
     };
 
     "leading block comment expressions execute"_test = [] {
@@ -63,7 +63,7 @@ comment -}
 print "Hello World!")";
         auto res = repl.execute(code);
         expect(res.ok) << res.error;
-        expect(that % res.output.find("Hello World!") != std::string::npos);
+        expect(that % res.stdout_output.find("Hello World!") != std::string::npos);
     };
 
     "comments with blank lines before expression execute"_test = [] {
@@ -75,7 +75,7 @@ print "Hello World!")";
 print "Hello World!")";
         auto res = repl.execute(code);
         expect(res.ok) << res.error;
-        expect(that % res.output.find("Hello World!") != std::string::npos);
+        expect(that % res.stdout_output.find("Hello World!") != std::string::npos);
     };
 
     "definitions persist"_test = [] {
@@ -85,7 +85,7 @@ print "Hello World!")";
 
         auto res = repl.execute("xh_def_test");
         expect(res.ok);
-        expect_trim_eq(res.output, "42");
+        expect_trim_eq(res.result_content, "42");
     };
 
     "redefinitions replace old values"_test = [] {
@@ -98,7 +98,7 @@ print "Hello World!")";
 
         auto res = repl.execute("xh_redef_test");
         expect(res.ok);
-        expect_trim_eq(res.output, "5");
+        expect_trim_eq(res.result_content, "5");
     };
 
     "completion candidates include definitions and reserved ids"_test = [] {
@@ -129,18 +129,18 @@ data XhTypeableRecord = XhTypeableRecord
         // must continue to work.
         auto eval_res = repl.execute("xhField (XhTypeableRecord 42)");
         expect(eval_res.ok) << eval_res.error;
-        expect_trim_eq(eval_res.output, "42");
+        expect_trim_eq(eval_res.result_content, "42");
 
         auto simple_res = repl.execute("20 + 22");
         expect(simple_res.ok) << simple_res.error;
-        expect_trim_eq(simple_res.output, "42");
+        expect_trim_eq(simple_res.result_content, "42");
     };
 
     "expressions evaluate"_test = [] {
         auto& repl = repl_instance();
         auto res = repl.execute("let (a, b) = (10, 20) in a + b");
         expect(res.ok);
-        expect_trim_eq(res.output, "30");
+        expect_trim_eq(res.result_content, "30");
     };
 
     "expression errors are reported"_test = [] {
@@ -180,4 +180,5 @@ data XhTypeableRecord = XhTypeableRecord
         expect(sum(1, 2) == 3_i);
         expect(sum(0) == 0_i);
     };
+
 }

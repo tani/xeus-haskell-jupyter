@@ -8,9 +8,11 @@ namespace xeus_haskell {
 
 struct repl_result {
   bool ok;
-  std::string output;
+  std::string stdout_output;
+  std::string stderr_output;
+  std::string result_content;
+  std::string result_mime_type = "text/plain";
   std::string error;
-  std::string mime_type = "text/plain";
 };
 
 class MicroHsRepl {
