@@ -15,7 +15,12 @@ class KernelTests(jupyter_kernel_test.KernelTests):
     code_execute_result = [
         {"code": "2 + 2", "result": "4\n"},
         {"code": "reverse \"olleh\"", "result": "\"hello\"\n"},
-        {"code": "[1, 2, 3]", "result": "[1,2,3]\n"}
+        {"code": "[1, 2, 3]", "result": "[1,2,3]\n"},
+        {
+            "code": 'putStr "\\x02text/html\\x1F<h1>Hello</h1>\\x03"',
+            "result": "<h1>Hello</h1>",
+            "mime": "text/html"
+        }
     ]
     code_generate_error = "error \"boom\""
     code_history_pattern = "1+1"
