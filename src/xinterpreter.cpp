@@ -36,9 +36,11 @@ void interpreter::execute_request_impl(send_reply_callback cb,
     try {
       return m_repl.execute(code);
     } catch (const std::exception &e) {
-      return {false, std::string(), std::string(e.what())};
+      return {false, std::string(), std::string(), std::string(), "text/plain",
+              std::string(e.what())};
     } catch (...) {
-      return {false, std::string(), std::string("Unknown MicroHs error")};
+      return {false, std::string(), std::string(), std::string(), "text/plain",
+              std::string("Unknown MicroHs error")};
     }
   }();
 
@@ -55,13 +57,15 @@ void interpreter::execute_request_impl(send_reply_callback cb,
   }
 
   if (!config.silent) {
-    const std::string &output = exec_result.output;
-    if (!output.empty()) {
-      nl::json pub_data;
-      pub_data[exec_result.mime_type] = output;
-      publish_execution_result(execution_counter, std::move(pub_data),
-                               nl::json::object());
-    }
+    nl::json pub_data;
+    nl::json content;
+    content["stdout"] = exec_result.stdout_output;
+    content["stderr"] = exec_result.stderr_output;
+    content["result"] = exec_result.result_content;
+    content["type"] = exec_result.result_mime_type;
+    pub_data["application/vnd.xeus.haskell"] = content;
+    publish_execution_result(execution_counter, std::move(pub_data),
+                             nl::json::object());
   }
 
   cb(xeus::create_successful_reply(nl::json::array(), nl::json::object()));

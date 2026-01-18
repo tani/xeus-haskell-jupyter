@@ -71,6 +71,24 @@ ParsedOutput parse_protocol_output(std::string_view raw_output) {
   return {"text/plain", std::string(raw_output)};
 }
 
+// Helper function to count matching delimiters
+std::size_t find_matching_etx(std::string_view sv, std::size_t start_pos = 0) {
+  const char STX = '\x02';
+  const char ETX = '\x03';
+  int depth = 0;
+  for (std::size_t i = start_pos; i < sv.size(); ++i) {
+    if (sv[i] == STX) {
+      depth++;
+    } else if (sv[i] == ETX) {
+      depth--;
+      if (depth == 0) {
+        return i;
+      }
+    }
+  }
+  return std::string_view::npos;
+}
+
 std::string capture_stdout(std::function<void()> fn) {
 #ifdef _WIN32
   // Windows implementation (Fixed to capture Win32 and C runtime stdout)
@@ -199,6 +217,118 @@ std::string capture_stdout(std::function<void()> fn) {
   return output;
 #endif
 }
+
+std::string capture_stderr(std::function<void()> fn) {
+#ifdef _WIN32
+  // Windows implementation
+  HANDLE hRead, hWrite;
+  SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
+
+  if (!CreatePipe(&hRead, &hWrite, &sa, 0)) {
+    throw std::runtime_error("Failed to create pipe");
+  }
+
+  HANDLE hWriteDup;
+  if (!DuplicateHandle(GetCurrentProcess(), hWrite, GetCurrentProcess(),
+                       &hWriteDup, 0, FALSE, DUPLICATE_SAME_ACCESS)) {
+    CloseHandle(hRead);
+    CloseHandle(hWrite);
+    throw std::runtime_error("Failed to duplicate write handle");
+  }
+
+  HANDLE hStderr = GetStdHandle(STD_ERROR_HANDLE);
+  int stderr_fd = _dup(2);
+  if (stderr_fd == -1) {
+    throw std::runtime_error("Failed to dup original stderr");
+  }
+
+  int pipe_fd = _open_osfhandle((intptr_t)hWriteDup, _O_TEXT);
+  if (pipe_fd == -1) {
+    _close(stderr_fd);
+    CloseHandle(hRead);
+    CloseHandle(hWrite);
+    throw std::runtime_error("Failed to open osfhandle");
+  }
+
+  fflush(stderr);
+
+  if (!SetStdHandle(STD_ERROR_HANDLE, hWrite)) {
+    _close(pipe_fd);
+    _close(stderr_fd);
+    CloseHandle(hRead);
+    CloseHandle(hWrite);
+    throw std::runtime_error("Failed to set std handle");
+  }
+
+  if (_dup2(pipe_fd, 2) == -1) {
+    SetStdHandle(STD_ERROR_HANDLE, hStderr);
+    _close(pipe_fd);
+    _close(stderr_fd);
+    CloseHandle(hRead);
+    CloseHandle(hWrite);
+    throw std::runtime_error("Failed to dup2 stderr");
+  }
+
+  _close(pipe_fd);
+
+  try {
+    fn();
+  } catch (...) {
+    fflush(stderr);
+    _dup2(stderr_fd, 2);
+    _close(stderr_fd);
+    SetStdHandle(STD_ERROR_HANDLE, hStderr);
+    CloseHandle(hWrite);
+    CloseHandle(hRead);
+    throw;
+  }
+
+  fflush(stderr);
+
+  _dup2(stderr_fd, 2);
+  _close(stderr_fd);
+
+  SetStdHandle(STD_ERROR_HANDLE, hStderr);
+  CloseHandle(hWrite);
+
+  std::string output;
+  DWORD bytesRead;
+  char buffer[4096];
+  while (ReadFile(hRead, buffer, sizeof(buffer) - 1, &bytesRead, NULL) &&
+         bytesRead > 0) {
+    buffer[bytesRead] = '\0';
+    output += buffer;
+  }
+  CloseHandle(hRead);
+  return output;
+#else
+  // POSIX implementation
+  int pipefd[2];
+  if (pipe(pipefd) == -1)
+    return "";
+
+  int stderr_fd = dup(fileno(stderr));
+  fflush(stderr);
+  dup2(pipefd[1], fileno(stderr));
+  close(pipefd[1]);
+
+  fn();
+
+  fflush(stderr);
+  dup2(stderr_fd, fileno(stderr));
+  close(stderr_fd);
+
+  std::string output;
+  char buffer[4096];
+  ssize_t n;
+  while ((n = read(pipefd[0], buffer, sizeof(buffer) - 1)) > 0) {
+    buffer[n] = '\0';
+    output += buffer;
+  }
+  close(pipefd[0]);
+  return output;
+#endif
+}
 } // namespace
 
 MicroHsRepl::MicroHsRepl() {
@@ -228,27 +358,31 @@ MicroHsRepl::~MicroHsRepl() { mhs_repl_free(context); }
 
 repl_result MicroHsRepl::execute(std::string_view code) {
   std::string raw_output;
+  std::string raw_error;
 
   try {
-    raw_output = capture_stdout([&]() {
-      std::string code_str(code);
-      char *err = nullptr;
-      intptr_t rc =
-          mhs_repl_execute(context, const_cast<char *>(code_str.c_str()),
-                           static_cast<uintptr_t>(code_str.size()),
-                           reinterpret_cast<void *>(&err));
+    raw_error = capture_stderr([&]() {
+      raw_output = capture_stdout([&]() {
+        std::string code_str(code);
+        char *err = nullptr;
+        intptr_t rc =
+            mhs_repl_execute(context, const_cast<char *>(code_str.c_str()),
+                             static_cast<uintptr_t>(code_str.size()),
+                             reinterpret_cast<void *>(&err));
 
-      if (rc != 0 && err) {
-        std::string err_str(err);
-        mhs_repl_free_cstr(err);
-        throw std::runtime_error(err_str);
-      }
-      if (err)
-        mhs_repl_free_cstr(err);
+        if (rc != 0 && err) {
+          std::string err_str(err);
+          mhs_repl_free_cstr(err);
+          throw std::runtime_error(err_str);
+        }
+        if (err)
+          mhs_repl_free_cstr(err);
+      });
     });
   } catch (const std::runtime_error &e) {
     // Return default mime_type (text/plain) on error
-    return {false, std::string(), std::string(e.what()), "text/plain"};
+    return {false, std::string(), std::string(), std::string(), "text/plain",
+            std::string(e.what())};
   }
 
   // Normalize line endings: remove \r (CR)
@@ -256,15 +390,57 @@ repl_result MicroHsRepl::execute(std::string_view code) {
   // \n)
   raw_output.erase(std::remove(raw_output.begin(), raw_output.end(), '\r'),
                    raw_output.end());
+  raw_error.erase(std::remove(raw_error.begin(), raw_error.end(), '\r'),
+                  raw_error.end());
 
-  // Parse the captured output to separate MIME type and content
-  ParsedOutput parsed = parse_protocol_output(raw_output);
+  // Parse result wrapper
+  // Marker: \x02application/vnd.xeus.haskell.value\x1F
+  const std::string start_marker = "\x02" "application/vnd.xeus.haskell.value\x1F";
+  std::string stdout_output;
+  std::string result_content;
+  std::string result_mime_type = "text/plain";
+
+  size_t start_pos = raw_output.find(start_marker);
+  if (start_pos != std::string::npos) {
+    // Found the wrapper
+    stdout_output = raw_output.substr(0, start_pos); // Part before
+
+    size_t content_start = start_pos + start_marker.length();
+
+    // Find matching ETX
+    size_t end_pos = find_matching_etx(raw_output, start_pos);
+
+    if (end_pos != std::string::npos) {
+      result_content =
+          raw_output.substr(content_start, end_pos - content_start);
+
+      // Remaining stdout
+      if (end_pos + 1 < raw_output.size()) {
+        stdout_output += raw_output.substr(end_pos + 1);
+      }
+
+      // Now check if result_content is a Display protocol string
+      ParsedOutput inner = parse_protocol_output(result_content);
+      if (inner.mime_type != "text/plain" || inner.content != result_content) {
+        // It was parsed as protocol
+        result_mime_type = inner.mime_type;
+        result_content = inner.content;
+      }
+    } else {
+      result_content = raw_output.substr(content_start);
+    }
+  } else {
+    // No wrapper, everything is stdout
+    stdout_output = raw_output;
+  }
 
   return {
       true,
-      std::move(parsed.content),  // Parsed content
-      std::string(),              // No error
-      std::move(parsed.mime_type) // Parsed MIME type (or "text/plain")
+      std::move(stdout_output),
+      std::move(raw_error),
+      std::move(result_content),
+      std::move(result_mime_type),
+      std::string() // No error
   };
 }
 

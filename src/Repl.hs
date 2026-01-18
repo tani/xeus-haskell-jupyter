@@ -211,8 +211,17 @@ indent = unlines . map ("  " ++) . lines
 
 runBlock :: String -> String
 runBlock stmt = unlines
-  [ runResultName ++ " :: IO ()"
-  , runResultName ++ " = _printOrRun ("
+  [ "_myPrintOrRun :: (Typeable a, PrintOrRun a) => a -> IO ()"
+  , "_myPrintOrRun x ="
+  , "  case cast x of"
+  , "    Just (io :: IO ()) -> io"
+  , "    Nothing -> do"
+  , "      putStr \"\\x02\\&application/vnd.xeus.haskell.value\\x1F\""
+  , "      _printOrRun x"
+  , "      putStr \"\\x03\""
+  , ""
+  , runResultName ++ " :: IO ()"
+  , runResultName ++ " = _myPrintOrRun ("
   , indent stmt
   , "  )"
   ]
