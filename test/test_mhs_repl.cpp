@@ -200,4 +200,59 @@ data XhTypeableRecord = XhTypeableRecord
         expect_trim_eq(res.result_content, "42");
     };
 
+    "multiple rich output in stdout"_test = [] {
+        auto& repl = repl_instance();
+        // Mimic user snippet with definitions for STX, US, ETX
+        const auto code = R"(
+          let stx = "\x02"
+              us  = "\x1F"
+              etx = "\x03"
+          in do
+            putStr $ stx ++ "text/html" ++ us ++ "<p>Hello</p>" ++ etx
+            putStr $ stx ++ "text/csv" ++ us ++ "1,2,3,4" ++ etx
+            putStr $ stx ++ "text/plain" ++ us ++ "hello" ++ etx
+        )";
+        auto res = repl.execute(code);
+        expect(res.ok) << res.error;
+
+        // Everything should be in stdout, result empty (IO ())
+        expect(res.result_content == "");
+
+        // Verify stdout contains the sequence
+        std::string expected =
+            "\x02" "text/html" "\x1F" "<p>Hello</p>" "\x03"
+            "\x02" "text/csv" "\x1F" "1,2,3,4" "\x03"
+            "\x02" "text/plain" "\x1F" "hello" "\x03";
+        expect(res.stdout_output == expected) << "Actual: " << res.stdout_output;
+    };
+
+    "nested stx/etx in result"_test = [] {
+        auto& repl = repl_instance();
+        // Simulate a scenario where stdout has content AND we manually output a result wrapper
+        // that contains nested STX/ETX. This tests the robust parsing.
+        // We use IO () so Repl.hs doesn't add its own wrapper.
+        const auto code = R"(
+          let stx = "\x02"
+              us  = "\x1F"
+              etx = "\x03"
+              wrapper = "\x02application/vnd.xeus.haskell.value\x1F"
+          in do
+            putStr "stdout_before"
+            putStr wrapper
+            putStr "result_start"
+            putStr $ stx ++ "nested" ++ us ++ "data" ++ etx
+            putStr "result_end"
+            putStr etx
+            putStr "stdout_after"
+        )";
+        auto res = repl.execute(code);
+        expect(res.ok) << res.error;
+
+        // Check separation
+        expect(res.stdout_output == "stdout_beforestdout_after");
+
+        std::string expected_result = "result_start\x02nested\x1F" "data\x03result_end";
+        expect(res.result_content == expected_result);
+    };
+
 }
